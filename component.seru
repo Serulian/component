@@ -1,0 +1,178 @@
+from webidl`github.com/Serulian/virtualdom` import Node, Element
+from "github.com/Serulian/virtualdom" import VirtualNode, Renderable, EventManager, RenderToVirtualNode
+from "github.com/Serulian/virtualdom" import NodeWrapper, ApplyDiff, ComputeDiff, Renderer, Context
+from "github.com/Serulian/virtualdom" import DiffReporter, VirtualNodeWrapper
+
+from "github.com/Serulian/attachment" import Attachment
+
+from interfaces import DOMAttached, DOMDetached, StatefulComponent, PropsUpdatable
+
+/**
+ * componentVirtualNode attaches the VirtualNode generated for a component to the component.
+ */
+var<Attachment<VirtualNode>> componentVirtualNode = Attachment<VirtualNode>.Unique('cvn')
+
+/**
+ * componentDOMNode attaches the DOM Node generated for a component to the component.
+ */
+var<Attachment<Node>> componentDOMNode = Attachment<Node>.Unique('cdn')
+
+/**
+ * domNodeComponent attaches the component used to generate a DOM node to the node.
+ */
+var<Attachment<any>> domNodeComponent = Attachment<any>.Unique('dnc')
+
+/**
+ * componentsContext attaches the context to a component.
+ */
+var<Attachment<componentContext>> componentsContext = Attachment<componentContext>.Unique('cc')
+
+/**
+ * propsKeyCounter defines a counter for generating unique keys for PropsUpdated component
+ * VirtualNodes.
+ */
+var<int> propsKeyCounter = 0
+
+class componentReporter {
+	var<EventManager> eventManager	
+
+	function<void> NodeRemoved(domNode Node) {
+		component, _ := domNodeComponent.Get(domNode)
+		if component is not null {
+			detachEvented, _ := component.(DOMDetached)
+			detachEvented?.Detached(domNode)
+		}
+
+		this.eventManager.NodeRemoved(domNode)
+	}
+
+	function<void> NodeCreated(virtualNode VirtualNode, domNode Node) {
+		this.eventManager.NodeCreated(virtualNode, domNode)
+	}
+
+	function<void> NodeUpdated(virtualNode VirtualNode, domNode Node) {
+		this.eventManager.NodeUpdated(virtualNode, domNode)
+	}	
+}
+
+class componentContext {
+	var<EventManager> eventManager
+	var<Renderer> renderer
+	var<DiffReporter> diffReporter
+
+	constructor ForElement(element Element) {
+		em := EventManager.ForElement(element)
+		return componentContext{
+			eventManager: em,
+			renderer: componentRenderer.new(),
+			diffReporter: componentReporter{
+				eventManager: em,
+			},
+		}
+	}
+
+	function<T?> Get<T>(name string) {
+		return null
+	}
+
+	property<Renderer?> Renderer {
+		get { return this.renderer }
+	}
+
+	property<EventManager> EventManager {
+		get { return this.eventManager }
+	}
+}
+
+class componentRenderer {
+	function<VirtualNode> Render(component Renderable, path string, parent Renderable, context Context) {
+		propsUpdatable, _ := component.(PropsUpdatable)
+		if propsUpdatable is not null {
+			// Check the cache. If found, we simply reuse the component.
+			cached := Attachment<PropsUpdatable>.Global(`cache-${path}`).Get(parent)
+			if cached is not null {
+				cached.PropsUpdated(propsUpdatable.Props)
+				return (componentVirtualNode.Get(cached))!
+			}
+		}
+
+		var<VirtualNode> rendered = RenderToVirtualNode(component, context)
+		if propsUpdatable is not null {
+			// Set a key to ensure that the VirtualNode for the props is always reused,
+			// which in turn ensures that the DOM node never changes across diffs.
+			rendered = rendered{
+				Key: rendered.Key ?? `__component_propsupdated_${propsKeyCounter}`,
+			}
+
+			propsKeyCounter = propsKeyCounter + 1
+		}
+
+		var<bool> requiresCallback = false
+
+		attachEvented, _ := component.(DOMAttached)
+		if attachEvented is not null {
+			requiresCallback = true
+		}
+
+		detachEvented, _ := component.(DOMDetached)
+		if detachEvented is not null {
+			requiresCallback = true
+		}
+
+		statefulComponent, _ := component.(StatefulComponent)
+		if statefulComponent is not null {
+			requiresCallback = true
+		}
+
+		if requiresCallback {
+			rendered = rendered{
+				DOMNodeInserted: context.EventManager.RegisterFunction(function<void>(data any) {
+					node := data.(Node)
+					attachEvented?.Attached(node)
+					componentDOMNode.Set(component, node)
+					domNodeComponent.Set(node, component)
+				}),
+			}
+		}
+
+		componentVirtualNode.Set(component, rendered)
+		componentsContext.Set(component, context.(componentContext))
+
+		if propsUpdatable is not null {
+			Attachment<PropsUpdatable>.Global(`cache-${path}`).Set(parent, propsUpdatable)
+		}
+
+		return rendered
+	}
+}
+
+function<void> UpdateComponentState(component StatefulComponent, newState any) {
+	component.StateUpdated(newState)
+
+	currentVirtualNode := (componentVirtualNode.Get(component))!
+	context := (componentsContext.Get(component))!
+	node := (componentDOMNode.Get(component))!
+	
+	updatedVirtualNode := RenderToVirtualNode(component, context)
+
+	var diff = ComputeDiff(updatedVirtualNode, VirtualNodeWrapper.For(currentVirtualNode))
+	ApplyDiff(diff, node, context.diffReporter)	
+
+	componentVirtualNode.Set(component, updatedVirtualNode)
+}
+
+/**
+ * RenderComponent renders the full component into the given element in the DOM tree.
+ */
+function<void> RenderComponent(component Renderable, parent Element) {
+	context := componentContext.ForElement(parent)
+	rendered := context.renderer.Render(component, '', component, context)
+
+	parentVNode := VirtualNode{
+		TagName: string(parent.tagName),
+		Children: []VirtualNode{rendered},
+	}
+
+	var diff = ComputeDiff(parentVNode, NodeWrapper.For(parent))
+	ApplyDiff(diff, parent, context.diffReporter)
+}

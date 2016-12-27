@@ -1,0 +1,20 @@
+from webidl`github.com/Serulian/virtualdom` import Node
+from "github.com/Serulian/virtualdom" import Context
+
+interface PropsUpdatable {
+	property<any> Props { get }
+	function<void> PropsUpdated(props any)
+}
+
+interface DOMAttached {
+	function<void> Attached(node Node)
+}
+
+interface DOMDetached {
+	function<void> Detached(node Node)
+}
+
+interface StatefulComponent {
+	function<any> Render(context Context)
+	function<void> StateUpdated(state any)
+}
