@@ -33,6 +33,10 @@ var<Attachment<componentContext>> componentsContext = Attachment<componentContex
  */
 var<int> propsKeyCounter = 0
 
+/**
+ * componentReporter is a VirtualDOM reporter which calls the Detached function
+ * on components when they are removed from the DOM.
+ */
 class componentReporter {
 	var<EventManager> eventManager	
 
@@ -55,6 +59,10 @@ class componentReporter {
 	}	
 }
 
+/**
+ * componentContext is a VirtualDOM rendering context which keeps track of the custom
+ * renderer for components.
+ */
 class componentContext {
 	var<EventManager> eventManager
 	var<Renderer> renderer
@@ -84,12 +92,16 @@ class componentContext {
 	}
 }
 
+/**
+ * componentRenderer is a custom VirtualDOM renderner which handles automatic caching and
+ * reuse of PropsUpdatable components.
+ */
 class componentRenderer {
-	function<VirtualNode> Render(component Renderable, path string, parent Renderable, context Context) {
+	function<VirtualNode> Render(component Renderable, root Renderable, pathUnderRoot string, context Context) {
 		propsUpdatable, _ := component.(PropsUpdatable)
 		if propsUpdatable is not null {
 			// Check the cache. If found, we simply reuse the component.
-			cached := Attachment<PropsUpdatable>.Global(`cache-${path}`).Get(parent)
+			cached := Attachment<PropsUpdatable>.Global(`cache-${pathUnderRoot}`).Get(context)
 			if cached is not null {
 				cached.PropsUpdated(propsUpdatable.Props)
 				return (componentVirtualNode.Get(cached))!
@@ -139,25 +151,36 @@ class componentRenderer {
 		componentsContext.Set(component, context.(componentContext))
 
 		if propsUpdatable is not null {
-			Attachment<PropsUpdatable>.Global(`cache-${path}`).Set(parent, propsUpdatable)
+			Attachment<PropsUpdatable>.Global(`cache-${pathUnderRoot}`).Set(context, propsUpdatable)
 		}
 
 		return rendered
 	}
 }
 
+/**
+ * UpdateComponentState updates the state of the given component to that given, rerendering
+ * the component and children as necessary.
+ */
 function<void> UpdateComponentState(component StatefulComponent, newState any) {
+	// Call StateUpdated on the component to let it set its internal state.
 	component.StateUpdated(newState)
 
+	// Retrieve the existing virtual node, context and DOM node for the component. All must
+	// already be set.
 	currentVirtualNode := (componentVirtualNode.Get(component))!
 	context := (componentsContext.Get(component))!
 	node := (componentDOMNode.Get(component))!
-	
-	updatedVirtualNode := RenderToVirtualNode(component, context)
 
+	// Render an updated virtual DOM tree for the component, reflecting the updated state.	
+	updatedVirtualNode := context.renderer.Render(component, component, '', context)
+
+	// Compute a diff from the existing virtual DOM for the component to the updated DOM
+	// and apply it to the DOM node for the component.
 	var diff = ComputeDiff(updatedVirtualNode, VirtualNodeWrapper.For(currentVirtualNode))
 	ApplyDiff(diff, node, context.diffReporter)	
 
+	// Update our reference to the virtual DOM node for the component.
 	componentVirtualNode.Set(component, updatedVirtualNode)
 }
 
@@ -166,7 +189,7 @@ function<void> UpdateComponentState(component StatefulComponent, newState any) {
  */
 function<void> RenderComponent(component Renderable, parent Element) {
 	context := componentContext.ForElement(parent)
-	rendered := context.renderer.Render(component, '', component, context)
+	rendered := context.renderer.Render(component, component, '', context)
 
 	parentVNode := VirtualNode{
 		TagName: string(parent.tagName),
