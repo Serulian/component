@@ -1,9 +1,9 @@
-from webidl`github.com/Serulian/virtualdom` import Node, Element
-from "github.com/Serulian/virtualdom" import VirtualNode, Renderable, EventManager, RenderToVirtualNode
-from "github.com/Serulian/virtualdom" import NodeWrapper, ApplyDiff, ComputeDiff, Renderer, Context
-from "github.com/Serulian/virtualdom" import DiffReporter, VirtualNodeWrapper
+from webidl`github.com/serulian/virtualdom` import Node, Element
+from "github.com/serulian/virtualdom" import VirtualNode, Renderable, EventManager, RenderToVirtualNode
+from "github.com/serulian/virtualdom" import NodeWrapper, ApplyDiff, ComputeDiff, Renderer, Context
+from "github.com/serulian/virtualdom" import DiffReporter, VirtualNodeWrapper
 
-from "github.com/Serulian/attachment" import Attachment
+from "github.com/serulian/attachment" import Attachment
 
 from interfaces import DOMAttached, DOMDetached, StatefulComponent, PropsUpdatable
 

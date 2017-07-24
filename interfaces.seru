@@ -1,5 +1,5 @@
-from webidl`github.com/Serulian/virtualdom` import Node
-from "github.com/Serulian/virtualdom" import Context
+from webidl`github.com/serulian/virtualdom` import Node
+from "github.com/serulian/virtualdom" import Context
 
 interface PropsUpdatable {
 	property<any> Props { get }
