@@ -1,7 +1,7 @@
 from webidl`github.com/serulian/virtualdom` import Node, Element
 
 from "github.com/serulian/attachment" import Attachment
-from "github.com/serulian/virtualdom" import DiffReporter, VirtualNodeWrapper
+from "github.com/serulian/virtualdom" import DiffReporter
 from "github.com/serulian/virtualdom" import NodeWrapper, ApplyDiff, ComputeDiff, Renderer, Context
 from "github.com/serulian/virtualdom" import VirtualNode, Renderable, EventManager, RenderToVirtualNode
 from interfaces import DOMAttached, DOMDetached, StatefulComponent, PropsUpdatable
@@ -161,18 +161,16 @@ function UpdateComponentState(component StatefulComponent, newState any) {
 	// Call StateUpdated on the component to let it set its internal state.
 	component.StateUpdated(newState)
 
-	// Retrieve the existing virtual node, context and DOM node for the component. All must
-	// already be set.
-	currentVirtualNode := componentVirtualNode.Get(component)!
+	// Retrieve the existing context and DOM node for the component. All must already be set.
 	context := componentsContext.Get(component)!
 	node := componentDOMNode.Get(component)!
 
 	// Render an updated virtual DOM tree for the component, reflecting the updated state.	
 	updatedVirtualNode := context.renderer.Render(component, component, '', context)
 
-	// Compute a diff from the existing virtual DOM for the component to the updated DOM
+	// Compute a diff from the existing DOM node for the component to the updated DOM
 	// and apply it to the DOM node for the component.
-	var diff = ComputeDiff(updatedVirtualNode, VirtualNodeWrapper.For(currentVirtualNode))
+	var diff = ComputeDiff(updatedVirtualNode, NodeWrapper.For(node))
 	ApplyDiff(diff, node, context.diffReporter)
 
 	// Update our reference to the virtual DOM node for the component.
