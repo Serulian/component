@@ -139,6 +139,11 @@ class componentRenderer {
 					componentDOMNode.Set(component, node)
 					domNodeComponent.Set(node, component)
 				}),
+				DOMNodeUpdated: context.EventManager.RegisterFunction(function(data any) {
+					node := data.(Node)
+					componentDOMNode.Set(component, node)
+					domNodeComponent.Set(node, component)
+				}),
 			}
 		}
 
